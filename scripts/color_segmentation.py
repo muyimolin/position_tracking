@@ -8,7 +8,8 @@ import argparse
 import cv2
 import matplotlib.pyplot as plt
 from std_msgs.msg import String
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, PointCloud2
+import sensor_msgs.point_cloud2 as pc2
 from cv_bridge import CvBridge, CvBridgeError
 import time
 import numpy as np
@@ -51,9 +52,11 @@ class image_converter:
 
         self.image_topic = "/kinect2/" + self.image_quality + "/image_color_rect"
         self.depth_topic = "/kinect2/" + self.image_quality + "/image_depth_rect"
+        self.cloud_topic = "/kinect2/" + self.image_quality + "/points"
 
         self.image_sub = rospy.Subscriber(self.image_topic,Image,self.callback_img)
         self.depth_sub = rospy.Subscriber(self.depth_topic,Image,self.callback_depth)
+        self.cloud_sub = rospy.Subscriber(self.cloud_topic,PointCloud2,self.callback_cloud)
 
         self.previous_time = time.clock()
         self.current_time = time.clock()
@@ -70,7 +73,11 @@ class image_converter:
         self.cx = 0.0
         self.cy = 0.0
         self.h = 0.0
-        self.contour = []
+        self.contour = None
+        self.contour_group = []
+        self.cloud = PointCloud2()
+        self.cloud_xyz = None
+        self.centroid_xyz = []
 
         if os.path.isfile('markers_v1.json'):
             print "Loading marker information from markers_v1.json"
@@ -100,14 +107,15 @@ class image_converter:
             self.cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
         except CvBridgeError, e:
             print e
-
         (rows,cols,channels) = self.cv_image.shape
-        print "row={}, col={}, channels={} \n".format(rows, cols, channels)
+        # print "row={}, col={}, channels={} \n".format(rows, cols, channels)
 
         if len(self.hs_filters) > 0:
             blobs = ct.detect_hs(self.cv_image, self.hs_filters)
         else:
             blobs = ct.detect_hues(self.cv_image, self.hue_filters)
+
+        self.centroid_xyz = []
 
         for idx, blob in enumerate(blobs):
             self.cx, self.cy, self.h, self.contour = blob
@@ -116,6 +124,78 @@ class image_converter:
             cv2.circle(self.cv_image, (self.cx, self.cy), 7,  bgr,     -1)
             cv2.circle(self.cv_image, (self.cx, self.cy), 7, (250, 250, 250), 2)
 
+            if self.cloud is not None:
+                mask = np.zeros(self.cv_image.shape[0:2], np.uint8)
+                print "idx = ", idx, "\n"
+                # drawContours( dst, contours, idx, color, CV_FILLED, 8, hierarchy );
+                # pf = open("/home/motion/ros_ws/src/position_tracking/data/output.txt", "w")
+                # print>>pf, "Index = ", idx, "Contour = \n"
+                # print>>pf, self.contour, "\n\n"
+                # print>>pf, "Mask before contour = \n"
+                # print>>pf, mask, "\n\n"
+                cv2.drawContours(mask,[self.contour],0,255,1)
+                # print>>pf, "Mask after contour = \n"
+                # print>>pf, mask, "\n\n"
+                # print type(self.contour), "size = ", self.contour.shape
+                # print>>pf, "mask_px = \n"
+                mask_px = np.nonzero(mask)
+                mask_px_trans = np.transpose(np.nonzero(mask))
+                # print>>pf, mask_px, "\n"
+                # print>>pf, "==========================================="
+                # print mask_px.shape
+                cv2.imshow("Mask Image", mask)
+                cv2.waitKey(20)
+
+                points = []
+                cloud_mask = mask_px
+
+                #================ x - right, y - down, z - forward ===============
+                for i in range(0,len(cloud_mask[0])):
+                    ind_x = cloud_mask[0][i]
+                    ind_y = cloud_mask[1][i]
+                    # current_pt = self.cloud_xyz[ind_x + self.image_width*(ind_y-1)]
+                    current_pt = self.cloud_xyz[(ind_x-1)*self.image_width + (ind_y-1)]
+                    points.append(current_pt)
+                print "point list = "
+                print points, "\n"
+                point_array = np.array(points)
+                print "point array = "
+                print point_array
+                current_centroid = np.mean(point_array, axis=0)
+                print "current centroid = ", current_centroid
+                self.centroid_xyz.append(current_centroid)
+                print "\n"
+
+
+
+
+                # if cloud_mask.shape[0] > 0:
+                #     pass
+                    # points = self.cloud_xyz[np.clip(cloud_mask[:, 0]*cloud.shape[0], 0, cloud.shape[0]-1).round().astype(np.int),
+                #                    np.clip(cloud_mask[:, 1]*cloud.shape[1], 0, cloud.shape[1]-1).round().astype(np.int)]
+                # cloud_mask = inverse_uv[mask_px[:, 0], mask_px[:, 1], :]
+                # valid_mask = (cloud_mask[:,0] >= 0) & (cloud_mask[:,1] >= 0) & (cloud_mask[:,0] <= 1) & (cloud_mask[:,1] <= 1)
+                # cloud_mask = cloud_mask[valid_mask]
+                #
+                # if cloud_mask.shape[0] > 0:
+                #     points = cloud[np.clip(cloud_mask[:, 0]*cloud.shape[0], 0, cloud.shape[0]-1).round().astype(np.int),
+                #                    np.clip(cloud_mask[:, 1]*cloud.shape[1], 0, cloud.shape[1]-1).round().astype(np.int)]
+                #
+                #     rgb_values = np.array([pcl_vis.rgb_to_pcl_float(
+                #         frame[mask_px[i, 0], mask_px[i, 1], 0],
+                #         frame[mask_px[i, 0], mask_px[i, 1], 1],
+                #         frame[mask_px[i, 0], mask_px[i, 1], 2]) for i in xrange(points.shape[0])]
+                #                           , dtype=np.float32).reshape(points.shape[0], 1)
+                #     #import IPython.core.debugger as pdb
+                #     #pdb.Tracer()()
+                #
+                #     centroid = (points.sum(0)/points.shape[0])
+                #
+                #     if centroid[2] > 0:
+                #         centroids_xyz = np.append(centroids_xyz, centroid.reshape(1,3), 0)
+                #         points_rgb = np.append(points_rgb, np.append(points, rgb_values, 1), 0)
+                #         cv2.circle(frame, (cx, cy), 7, (0, 0, 0), 2)
+                #
         cv2.imshow("Image window", self.cv_image)
         cv2.waitKey(20)
 
@@ -124,41 +204,23 @@ class image_converter:
             self.depth_image = self.bridge.imgmsg_to_cv2(data, "16UC1")
         except CvBridgeError, e:
             print e
+        if self.depth_image is not None:
+            (rows,cols,channels) = self.depth_image.shape
+            # print "row={}, col={}, channels={} \n".format(rows, cols, channels)
+            if rows > 50 and cols > 50:
+                pass
 
-        (rows,cols,channels) = self.depth_image.shape
-        print "row={}, col={}, channels={} \n".format(rows, cols, channels)
+    def callback_cloud(self,data):
+        self.cloud = data
+        if self.cloud is not None:
+            generator = pc2.read_points(self.cloud, skip_nans=False, field_names=("x", "y", "z"))
+            self.cloud_xyz = list(generator)
 
-        if rows > 50 and cols > 50:
-            mask = np.zeros(self.cv_image.shape[0:2], np.uint8)
-            cv2.drawContours(mask,[self.contour],0,255,-1)
-            mask_px = np.transpose(np.nonzero(mask))
+            # .reshape((self.image_height, self.image_width))
 
-            # cloud_mask = inverse_uv[mask_px[:, 0], mask_px[:, 1], :]
-            # valid_mask = (cloud_mask[:,0] >= 0) & (cloud_mask[:,1] >= 0) & (cloud_mask[:,0] <= 1) & (cloud_mask[:,1] <= 1)
-            # cloud_mask = cloud_mask[valid_mask]
-            #
-            # if cloud_mask.shape[0] > 0:
-            #     points = cloud[np.clip(cloud_mask[:, 0]*cloud.shape[0], 0, cloud.shape[0]-1).round().astype(np.int),
-            #                    np.clip(cloud_mask[:, 1]*cloud.shape[1], 0, cloud.shape[1]-1).round().astype(np.int)]
-            #
-            #     rgb_values = np.array([pcl_vis.rgb_to_pcl_float(
-            #         frame[mask_px[i, 0], mask_px[i, 1], 0],
-            #         frame[mask_px[i, 0], mask_px[i, 1], 1],
-            #         frame[mask_px[i, 0], mask_px[i, 1], 2]) for i in xrange(points.shape[0])]
-            #                           , dtype=np.float32).reshape(points.shape[0], 1)
-            #     #import IPython.core.debugger as pdb
-            #     #pdb.Tracer()()
-            #
-            #     centroid = (points.sum(0)/points.shape[0])
-            #
-            #     if centroid[2] > 0:
-            #         centroids_xyz = np.append(centroids_xyz, centroid.reshape(1,3), 0)
-            #         points_rgb = np.append(points_rgb, np.append(points, rgb_values, 1), 0)
-            #         cv2.circle(frame, (cx, cy), 7, (0, 0, 0), 2)
-
-        # cv2.imshow("Depth window", self.depth_image)
-        cv2.waitKey(20)
-
+            # pf = open("/home/motion/ros_ws/src/position_tracking/data/output.txt", "w")
+            # print>>pf, self.xyz_generator, "\n"
+            # pf.close()
 
 def main(args):
     ic = image_converter()

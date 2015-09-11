@@ -17,6 +17,7 @@ class image_converter:
         self.image_sub = rospy.Subscriber("/kinect2/sd/image_color_rect",Image,self.callback_img)
         self.depth_sub = rospy.Subscriber("/kinect2/sd/image_depth_rect",Image,self.callback_depth)
 
+
     def callback_img(self,data):
         try:
             cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
