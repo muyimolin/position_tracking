@@ -55,7 +55,7 @@ class image_converter:
         self.cloud_topic = "/kinect2/" + self.image_quality + "/points"
 
         self.image_sub = rospy.Subscriber(self.image_topic,Image,self.callback_img)
-        self.depth_sub = rospy.Subscriber(self.depth_topic,Image,self.callback_depth)
+        # self.depth_sub = rospy.Subscriber(self.depth_topic,Image,self.callback_depth)
         self.cloud_sub = rospy.Subscriber(self.cloud_topic,PointCloud2,self.callback_cloud)
 
         self.previous_time = time.clock()
@@ -78,6 +78,7 @@ class image_converter:
         self.cloud = PointCloud2()
         self.cloud_xyz = None
         self.centroid_xyz = []
+        self.command = None
 
         if os.path.isfile('markers_v1.json'):
             print "Loading marker information from markers_v1.json"
@@ -166,38 +167,8 @@ class image_converter:
                 self.centroid_xyz.append(current_centroid)
                 print "\n"
 
-
-
-
-                # if cloud_mask.shape[0] > 0:
-                #     pass
-                    # points = self.cloud_xyz[np.clip(cloud_mask[:, 0]*cloud.shape[0], 0, cloud.shape[0]-1).round().astype(np.int),
-                #                    np.clip(cloud_mask[:, 1]*cloud.shape[1], 0, cloud.shape[1]-1).round().astype(np.int)]
-                # cloud_mask = inverse_uv[mask_px[:, 0], mask_px[:, 1], :]
-                # valid_mask = (cloud_mask[:,0] >= 0) & (cloud_mask[:,1] >= 0) & (cloud_mask[:,0] <= 1) & (cloud_mask[:,1] <= 1)
-                # cloud_mask = cloud_mask[valid_mask]
-                #
-                # if cloud_mask.shape[0] > 0:
-                #     points = cloud[np.clip(cloud_mask[:, 0]*cloud.shape[0], 0, cloud.shape[0]-1).round().astype(np.int),
-                #                    np.clip(cloud_mask[:, 1]*cloud.shape[1], 0, cloud.shape[1]-1).round().astype(np.int)]
-                #
-                #     rgb_values = np.array([pcl_vis.rgb_to_pcl_float(
-                #         frame[mask_px[i, 0], mask_px[i, 1], 0],
-                #         frame[mask_px[i, 0], mask_px[i, 1], 1],
-                #         frame[mask_px[i, 0], mask_px[i, 1], 2]) for i in xrange(points.shape[0])]
-                #                           , dtype=np.float32).reshape(points.shape[0], 1)
-                #     #import IPython.core.debugger as pdb
-                #     #pdb.Tracer()()
-                #
-                #     centroid = (points.sum(0)/points.shape[0])
-                #
-                #     if centroid[2] > 0:
-                #         centroids_xyz = np.append(centroids_xyz, centroid.reshape(1,3), 0)
-                #         points_rgb = np.append(points_rgb, np.append(points, rgb_values, 1), 0)
-                #         cv2.circle(frame, (cx, cy), 7, (0, 0, 0), 2)
-                #
         cv2.imshow("Image window", self.cv_image)
-        cv2.waitKey(20)
+        self.command = cv2.waitKey(10)
 
     def callback_depth(self,data):
         try:
