@@ -9,18 +9,20 @@ import os.path
 
 
 if __name__ == '__main__':
-    folder_name = "/home/motion/ros_ws/src/position_tracking/data/image/"
-    sample_foler = "sample/"
+    frame_folder = "/home/motion/ros_ws/src/position_tracking/data/image/"
+    sample_folder = "/home/motion/ros_ws/src/position_tracking/scripts/sample/"
     file_name = "frame0000.jpg"
-    img = cv2.imread(folder_name+file_name,cv2.IMREAD_COLOR)
+    img = cv2.imread(frame_folder+file_name,cv2.IMREAD_COLOR)
 
     cv2.imshow("Image window", img)
 
     (height, width) = img.shape[:2]
-    img_crop = img[int(height/2)-10:int(height/2)+60, int(width/2)-5:int(width/2)+10];
-    sample_name = "sample001.jpg"
-    print "save sample"
-    cv2.imwrite(folder_name + sample_foler + sample_name, img_crop)
+    # img_crop = img[int(height/2)-10:int(height/2)+60, int(width/2)-5:int(width/2)+10];
+
+    sample_name = "sample002.jpg"
+    img_crop = cv2.imread(sample_folder + sample_name, cv2.IMREAD_COLOR)
+    # print "save sample"
+    # cv2.imwrite(sample_folder + sample_name, img_crop)
 
     blank_image = np.zeros((height, width, 3), np.uint8)
     img_HSV = cv2.cvtColor(img, cv2.COLOR_BGR2HSV);

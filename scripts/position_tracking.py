@@ -46,27 +46,31 @@ class image_converter:
 
         self.cv_image = np.zeros((self.image_height,self.image_width,3), np.uint8)
 
-        # the return value of this algorithm is a list of centroids for the detected blobs
-        self.centroids_xyz = np.zeros((0, 3), dtype=np.float32)
-
         self.cloud = PointCloud2()
         self.centroid_xyz = []
         self.command = None
         self.sample_list = list()
-        self.hsv_threshold = [7.5, 75, 75]
+        self.hsv_threshold = [5, 75, 75]
         # detect_mode options: hue, hist
         self.detect_mode = "hue"
         self.disc = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(5,5))
         self.cloud_xyz = None
-        sample_dir = "/home/motion/ros_ws/src/position_tracking/data/image/sample/"
-        sample_name = os.listdir(sample_dir)
+        sample_dir = "/home/motion/ros_ws/src/position_tracking/scripts/sample/"
+        self.sample_name = os.listdir(sample_dir)
         self.hs_filter = list()
         self.hsv_str = ["hue", "sat", "val"]
         self.hsv_range = [180, 255, 255]
         self.color_MIN = list()
         self.color_MAX = list()
 
-        for s in sample_name:
+        # initilize position list for each sample
+        self.n_sample = len(self.sample_name)
+        for i in range(0, self.n_sample):
+            cmd_str = "self.centroids_xyz_" + str(i) + "=[]"
+            exec cmd_str
+            print "Create position sequence: ", i
+
+        for s in self.sample_name:
             sample_file = sample_dir + s
             print sample_file
             if os.path.isfile(sample_file):
@@ -138,9 +142,10 @@ class image_converter:
                 point_array = np.array(cloud_pt)
                 point_array = point_array[~np.isnan(point_array).any(1)]
                 current_centroid = np.mean(point_array, axis=0)
-                print current_centroid
-
-            self.centroid_xyz.append(current_centroid)
+                print self.sample_name[i], current_centroid
+                cmd_str = "self.centroids_xyz_" + str(i) + ".append(current_centroid)"
+                exec cmd_str
+            # self.centroid_xyz.append(current_centroid)
 
     def callback_cloud(self, data):
         self.cloud = data
