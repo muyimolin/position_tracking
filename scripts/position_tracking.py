@@ -79,13 +79,18 @@ class image_converter:
         self.centroid_xyz = []
         self.command = None
         self.sample_list = list()
-        self.hue_threshold = 5
-        self.detect_mode = "hist"
+        self.hsv_threshold = [7.5, 75, 75]
+        # detect_mode options: hue, hist
+        self.detect_mode = "hue"
         self.disc = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(5,5))
         self.cloud_xyz = None
         sample_dir = "/home/motion/ros_ws/src/position_tracking/data/image/sample/"
         sample_name = os.listdir(sample_dir)
         self.hs_filter = list()
+        self.hsv_str = ["hue", "sat", "val"]
+        self.hsv_range = [180, 255, 255]
+        self.color_MIN = list()
+        self.color_MAX = list()
 
         for s in sample_name:
             sample_file = sample_dir + s
@@ -97,20 +102,26 @@ class image_converter:
                 # k = cv2.waitKey(0) & 0xFF
                 (height, width) = img.shape[:2]
                 img_HSV = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-                hist_sample = cv2.calcHist([img_HSV],[0, 1], None, [180, 256], [0, 180, 0, 256])
-                cv2.normalize(hist_sample, hist_sample, 0, 255, cv2.NORM_MINMAX)
-                self.sample_list.append(hist_sample)
+                hist_sample_2D = cv2.calcHist([img_HSV],[0, 1], None, [180, 255], [0, 180, 0, 255])
+                cv2.normalize(hist_sample_2D, hist_sample_2D, 0, 255, cv2.NORM_MINMAX)
+                self.sample_list.append(hist_sample_2D)
 
-                hist_hue = np.sum(hist_sample, axis=1)
-                hist_sat = np.sum(hist_sample, axis=0)
-                hist_hue_max = np.amax(hist_hue)
-                hist_sat_max = np.amax(hist_sat)
-                hist_hue_max_idx = np.argmax(hist_hue)
-                hist_sat_max_idx = np.argmax(hist_sat)
+                hist_max_bin = []
+                for i in range(0, 3):
+                    hist_sample = cv2.calcHist([img_HSV],[i], None, [self.hsv_range[i]], [0, self.hsv_range[i]])
+                    hist = np.sum(hist_sample, axis=1)
+                    hist_max = np.amax(hist)
+                    hist_max_idx = np.argmax(hist)
+                    print self.hsv_str, ": size = ", hist.shape, "max = ", hist_max, "max_idx = ", hist_max_idx
+                    hist_max_bin.append(hist_max_idx)
 
-                print "hue_size = ", hist_hue.shape, "hue_max = ", hist_hue_max, "hist_hue_max_idx = ", hist_hue_max_idx
-                print "v_size = ", hist_sat.shape, "sat_max = ", hist_sat_max, "hist_sat_max_idx = ", hist_sat_max_idx
-                self.hs_filter.append([hist_sat_max_idx, hist_hue_max_idx])
+                self.hs_filter.append(hist_max_bin)
+                color_min = np.asarray(hist_max_bin) - np.asarray(self.hsv_threshold)
+                color_max = np.asarray(hist_max_bin) + np.asarray(self.hsv_threshold)
+                print color_min, color_max
+                self.color_MIN.append(color_min)
+                self.color_MAX.append(color_max)
+                print hist_max_bin
 
     def callback_img(self,data):
         try:
@@ -122,13 +133,12 @@ class image_converter:
 
         cv_mask_list = list()
         if len(self.hs_filter) > 0:
-            cv_mask_hue = cv_mask_sat = np.array(self.cv_image.shape[:2], np.uint8)
             for i, hs in enumerate(self.hs_filter):
                 if self.detect_mode == "hue":
-                    cv_mask_hue = cv_image_HSV[:, :, 1].clip(hs[1] - self.hue_threshold, hs[1] + self.hue_threshold)
-                    cv_mask_sat = cv_image_HSV[:, :, 0].clip(hs[0] - self.hue_threshold, hs[0] + self.hue_threshold)
-                    cv_mask = cv2.bitwise_and(cv_mask_hue, cv_mask_hue, mask=cv_mask_sat)
-                    cv2.imshow("Image window", cv_mask)
+                    mask = cv2.inRange(cv_image_HSV, self.color_MIN[i], self.color_MAX[i])
+                    cv_image_HSV_masked = cv2.bitwise_and(self.cv_image, self.cv_image, mask=mask)
+                    cv2.imshow("Image window", cv_image_HSV_masked)
+                    cv_mask_list.append(mask)
                     self.command = cv2.waitKey(1)
 
                 elif self.detect_mode == "hist":
@@ -146,16 +156,22 @@ class image_converter:
         if self.cloud_xyz is not None:
             for i, mask in enumerate(cv_mask_list):
                 cloud_pt = list()
+                #  size mask.shape = (424 = self.image_height, 512 = self.image_height)
+                # len(mask[0] = 512), len(ind_y = 424)
                 ind_x = np.where(mask == 255)[0]
                 ind_y = np.where(mask == 255)[1]
-                # print type(ind_x), "ind_x = ", ind_x.shape, "ind_y = ", ind_y.shape
+            #     # print type(ind_x), "ind_x = ", ind_x.shape, "ind_y = ", ind_y.shape
                 for i_pt in range(0, ind_x.shape[0]):
-                    current_pt = self.cloud_xyz[(ind_x[i_pt] - 1)*self.image_width + (ind_y[i_pt]-1)]
+                    current_pt = self.cloud_xyz[(ind_x[i_pt])*self.image_width + (ind_y[i_pt])]
                     cloud_pt.append(current_pt)
                 point_array = np.array(cloud_pt)
+                # print "old size = ", point_array.shape
                 point_array = point_array[~np.isnan(point_array).any(1)]
                 # print point_array.shape
                 current_centroid = np.mean(point_array, axis=0)
+                # current_centroid[1] = - current_centroid[1]
+                # current_centroid[2] = - current_centroid[2]
+                # print "new size = ", point_array.shape
                 print current_centroid
 
             self.centroid_xyz.append(current_centroid)
@@ -165,6 +181,7 @@ class image_converter:
         if self.cloud is not None:
             generator = pc2.read_points(self.cloud, skip_nans=False, field_names=("x", "y", "z"))
             self.cloud_xyz = list(generator)
+            # print self.cloud_xyz[:10]
 
 
 def main(args):

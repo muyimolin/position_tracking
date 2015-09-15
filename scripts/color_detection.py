@@ -43,11 +43,12 @@ if __name__ == '__main__':
     # plt.subplot(223), plt.imshow(hist)
     # plt.subplot(224), plt.imshow(hist_masked)
 
-    color = {'b', 'g', 'r'}
-    value_range = [180, 256, 256]
+    color = ["b", "g", "r"]
+    value_range = [180, 255, 255]
     for i, col in enumerate(color):
         hist = cv2.calcHist([img_HSV], [i], None, [value_range[i]], [0, value_range[i]])/float(img_HSV.size)
         hist_mask = cv2.calcHist([img_crop_HSV], [i], None, [value_range[i]], [0, value_range[i]])/float(img_crop_HSV.size)
+        print "max", col, "=", np.argmax(hist_mask)
         plt.plot(hist, color=col)
         plt.plot(hist_mask, color=col, linewidth=3.0)
         plt.xlim([0, 256])
