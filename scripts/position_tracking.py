@@ -4,32 +4,13 @@ __author__ = 'Jane Li'
 
 import roslib, rospy
 import sys, time, os
-import argparse
+# import argparse
 import cv2
-import matplotlib.pyplot as plt
-from std_msgs.msg import String
 from sensor_msgs.msg import Image, PointCloud2
 import sensor_msgs.point_cloud2 as pc2
 from cv_bridge import CvBridge, CvBridgeError
 import time
 import numpy as np
-import cofi.generators.color_generator as cg
-import cofi.trackers.color_tracker as ct
-import cofi.visualization.point_cloud as pcl_vis
-
-
-try:
-    import pcl
-    has_pcl = True
-except ImportError:
-    has_pcl = False
-
-# can go from 0 (hard colors) to 1 (soft colors)
-COLOR_MARGIN = 0.52
-COLOR_MARGIN_HS = 0.75
-
-NUM_COLORS = 12
-ok = True
 
 
 class image_converter:
@@ -65,17 +46,10 @@ class image_converter:
 
         self.cv_image = np.zeros((self.image_height,self.image_width,3), np.uint8)
 
-        self.points_rgb = np.zeros((0, 4), dtype=np.float32)
         # the return value of this algorithm is a list of centroids for the detected blobs
         self.centroids_xyz = np.zeros((0, 3), dtype=np.float32)
 
-        self.cx = 0.0
-        self.cy = 0.0
-        self.h = 0.0
-        self.contour = None
-        self.contour_group = []
         self.cloud = PointCloud2()
-        self.cloud_flag = False;
         self.centroid_xyz = []
         self.command = None
         self.sample_list = list()
@@ -98,9 +72,6 @@ class image_converter:
             if os.path.isfile(sample_file):
                 print "Load sample ..."
                 img = cv2.imread(sample_file, cv2.IMREAD_COLOR)
-                # cv2.imshow("Image window", img)
-                # k = cv2.waitKey(0) & 0xFF
-                (height, width) = img.shape[:2]
                 img_HSV = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
                 hist_sample_2D = cv2.calcHist([img_HSV],[0, 1], None, [180, 255], [0, 180, 0, 255])
                 cv2.normalize(hist_sample_2D, hist_sample_2D, 0, 255, cv2.NORM_MINMAX)
@@ -165,13 +136,8 @@ class image_converter:
                     current_pt = self.cloud_xyz[(ind_x[i_pt])*self.image_width + (ind_y[i_pt])]
                     cloud_pt.append(current_pt)
                 point_array = np.array(cloud_pt)
-                # print "old size = ", point_array.shape
                 point_array = point_array[~np.isnan(point_array).any(1)]
-                # print point_array.shape
                 current_centroid = np.mean(point_array, axis=0)
-                # current_centroid[1] = - current_centroid[1]
-                # current_centroid[2] = - current_centroid[2]
-                # print "new size = ", point_array.shape
                 print current_centroid
 
             self.centroid_xyz.append(current_centroid)
@@ -181,7 +147,6 @@ class image_converter:
         if self.cloud is not None:
             generator = pc2.read_points(self.cloud, skip_nans=False, field_names=("x", "y", "z"))
             self.cloud_xyz = list(generator)
-            # print self.cloud_xyz[:10]
 
 
 def main(args):
