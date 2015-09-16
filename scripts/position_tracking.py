@@ -52,7 +52,7 @@ class image_converter:
         self.sample_list = list()
         self.hsv_threshold = [5, 75, 75]
         # detect_mode options: hue, hist
-        self.detect_mode = "hue"
+        self.detect_mode = "hist"
         self.disc = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(5,5))
         self.cloud_xyz = None
         sample_dir = "/home/motion/ros_ws/src/position_tracking/scripts/sample/"
