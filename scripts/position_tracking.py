@@ -56,7 +56,8 @@ class image_converter:
         self.disc = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(5,5))
         self.cloud_xyz = None
         sample_dir = "/home/motion/ros_ws/src/position_tracking/scripts/sample/"
-        self.sample_name = os.listdir(sample_dir)
+        self.sample_name = [f for f in os.listdir(sample_dir) if os.path.isfile(os.path.join(sample_dir, f))]
+        print self.sample_name
         self.hs_filter = list()
         self.hsv_str = ["hue", "sat", "val"]
         self.hsv_range = [180, 255, 255]

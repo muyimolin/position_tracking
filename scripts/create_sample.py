@@ -36,7 +36,7 @@ class Circle_drawing():
     def __init__(self, mode):
 
         self.sample_folder = "/home/motion/ros_ws/src/position_tracking/scripts/sample/"
-        self.frame_folder = "/home/motion/ros_ws/src/position_tracking/scripts/frame/yellow/"
+        self.frame_folder = "/home/motion/ros_ws/src/position_tracking/scripts/frame/"
 
         self.sample_name = "sample002.jpg"
         self.frame_name = "frame0000.jpg"
