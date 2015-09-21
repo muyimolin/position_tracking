@@ -4,21 +4,35 @@ __author__ = 'Jane Li'
 
 import roslib, rospy
 import sys, time, os
-# import argparse
 import cv2
 from sensor_msgs.msg import Image, PointCloud2
-import sensor_msgs.point_cloud2 as pc2
-from visualization_msgs.msg import Marker 
+from sensor_msgs.point_cloud2 import _get_struct_fmt
+import struct
 from cv_bridge import CvBridge, CvBridgeError
+from visualization_msgs.msg import Marker 
 import time
 import numpy as np
+import roslib.message
 
+
+
+class PointCloudAccessor:
+    def __init__(self,cloud,field_names):
+        assert isinstance(cloud, roslib.message.Message) and cloud._type == 'sensor_msgs/PointCloud2', 'cloud is not a sensor_msgs.msg.PointCloud2'
+        fmt = _get_struct_fmt(cloud.is_bigendian, cloud.fields, field_names)
+        self.width, self.height, self.point_step, self.row_step, self.data = cloud.width, cloud.height, cloud.point_step, cloud.row_step, cloud.data
+        self.unpack_from = struct.Struct(fmt).unpack_from
+    def __call__(self,i,j):
+        assert i >= 0 and i < self.width,"Invalid row access %d not in [0,%d)"%(i,self.width)
+        assert j >= 0 and j < self.height,"Invalid column access %d not in [0,%d)"%(j,self.height)
+        return self.unpack_from(self.data, (self.row_step * j) + (self.point_step * i))
 
 class image_converter:
 
     def __init__(self, quality=""):
         self.image_pub = rospy.Publisher("/RGB_img",Image)
         self.marker_pub = rospy.Publisher("/glove", Marker)
+        
 
         cv2.namedWindow("Image window", 1)
         self.bridge = CvBridge()
@@ -40,15 +54,15 @@ class image_converter:
         self.image_topic = "/kinect2/" + self.image_quality + "/image_color_rect"
         self.cloud_topic = "/kinect2/" + self.image_quality + "/points"
 
-        self.image_sub = rospy.Subscriber(self.image_topic, Image, self.callback_img)
-        self.cloud_sub = rospy.Subscriber(self.cloud_topic, PointCloud2, self.callback_cloud)
+        self.image_sub = rospy.Subscriber(self.image_topic, Image, self.callback_img, queue_size=1)
+        self.cloud_sub = rospy.Subscriber(self.cloud_topic, PointCloud2, self.callback_cloud, queue_size=1)
 
         self.previous_time = time.clock()
         self.current_time = time.clock()
 
         self.cv_image = np.zeros((self.image_height,self.image_width,3), np.uint8)
 
-        self.cloud = PointCloud2()
+        self.cloud = None
         self.centroid_xyz = []
         self.command = None
         self.sample_list = list()
@@ -56,7 +70,6 @@ class image_converter:
         # detect_mode options: hue, hist
         self.detect_mode = "hist"
         self.disc = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(5,5))
-        self.cloud_xyz = None
         sample_dir = "/home/motion/APC_ws/src/position_tracking/scripts/sample/"
         self.sample_name = [f for f in os.listdir(sample_dir) if os.path.isfile(os.path.join(sample_dir, f))]
         print self.sample_name
@@ -65,6 +78,7 @@ class image_converter:
         self.hsv_range = [180, 255, 255]
         self.color_MIN = list()
         self.color_MAX = list()
+
 
         # initilize position list for each sample
         self.n_sample = len(self.sample_name)
@@ -101,6 +115,38 @@ class image_converter:
                 self.color_MAX.append(color_max)
                 print hist_max_bin
 
+        # initialize markers
+        
+        self.Marker_purple = Marker()
+        self.Marker_purple.type = Marker.SPHERE
+        self.Marker_purple.header.frame_id ="kinect2_link"
+        # self.Marker_purple.header.stamp = rospy.Time.now()
+        self.Marker_purple.pose.position.x = 0.0
+        self.Marker_purple.pose.position.y = 0.0
+        self.Marker_purple.pose.position.z = 0.0
+        self.Marker_purple.pose.orientation.w =1
+        self.Marker_purple.scale.x = 0.1
+        self.Marker_purple.scale.y = 0.1
+        self.Marker_purple.scale.z = 0.1
+        self.Marker_purple.color.r = 75.0/255.0
+        self.Marker_purple.color.g = 0.0/255.0
+        self.Marker_purple.color.b = 130.0/255.0
+        self.Marker_purple.color.a = 1.0
+        # self.marker_pub.publish(self.Marker_purple)
+
+    # def add_marker(self, color):
+    #     marker = Marker()
+    #     marker.type = Marker.SPHERE
+    #     marker.header.frame_id ="kinect2_link"
+    #     # marker.header.stamp = rospy.Time.now()
+    #     marker.pose.position.x, marker.pose.position.y, marker.pose.position.z = 0.0
+    #     Marker_purple.pose.orientation.w =1
+    #     Marker_purple.scale.x, Marker_purple.scale.y, Marker_purple.scale.z = 0.1
+    #     Marker_purple.color.r, Marker_purple.color.g, Marker_purple.color.b = color
+    #     Marker_purple.color.a = 1.0  
+    #     return marker
+
+
     def callback_img(self,data):
         try:
             self.cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
@@ -109,14 +155,15 @@ class image_converter:
 
         cv_image_HSV = cv2.cvtColor(self.cv_image, cv2.COLOR_BGR2HSV)
 
-        cv_mask_list = list()
+        t0 = time.time()
+        self.cv_mask_list = list()
         if len(self.hs_filter) > 0:
             for i, hs in enumerate(self.hs_filter):
                 if self.detect_mode == "hue":
                     mask = cv2.inRange(cv_image_HSV, self.color_MIN[i], self.color_MAX[i])
                     cv_image_HSV_masked = cv2.bitwise_and(self.cv_image, self.cv_image, mask=mask)
                     cv2.imshow("Image window", cv_image_HSV_masked)
-                    cv_mask_list.append(mask)
+                    self.cv_mask_list.append(mask)
                     self.command = cv2.waitKey(1)
 
                 elif self.detect_mode == "hist":
@@ -125,56 +172,40 @@ class image_converter:
                     cv2.filter2D(dst, -1, self.disc, dst)
                     ret, thresh = cv2.threshold(dst, 127, 255, 0)
                     mask = cv2.merge((thresh, thresh, thresh))
-                    cv_mask_list.append(mask)
+                    self.cv_mask_list.append(mask)
                     cv_image_masked = cv2.bitwise_and(self.cv_image, mask)
                     res = np.vstack((self.cv_image, cv_image_masked))
                     cv2.imshow("Image window", res)
                     self.command = cv2.waitKey(1)
-
-        if self.cloud_xyz is not None:
-            for i, mask in enumerate(cv_mask_list):
-                cloud_pt = list()
-                #  size mask.shape = (424 = self.image_height, 512 = self.image_height)
-                # len(mask[0] = 512), len(ind_y = 424)
-                ind_x = np.where(mask == 255)[0]
-                ind_y = np.where(mask == 255)[1]
-            #     # print type(ind_x), "ind_x = ", ind_x.shape, "ind_y = ", ind_y.shape
-                for i_pt in range(0, ind_x.shape[0]):
-                    current_pt = self.cloud_xyz[(ind_x[i_pt])*self.image_width + (ind_y[i_pt])]
-                    cloud_pt.append(current_pt)
-                point_array = np.array(cloud_pt)
-                point_array = point_array[~np.isnan(point_array).any(1)]
-                current_centroid = np.mean(point_array, axis=0)
-
-                glove_marker = Marker()
-                glove_marker.type = Marker.SPHERE
-                glove_marker.header.frame_id ="kinect2_link"
-                glove_marker.header.stamp = rospy.Time.now()
-                glove_marker.pose.position.x = current_centroid[0]
-                glove_marker.pose.position.y = current_centroid[1]
-                glove_marker.pose.position.z = current_centroid[2]
-                glove_marker.pose.orientation.w =1
-                glove_marker.scale.x = 0.1
-                glove_marker.scale.y = 0.1
-                glove_marker.scale.z = 0.1
-                glove_marker.color.r = 1.0
-                glove_marker.color.g = 192.0/255.0
-                glove_marker.color.b = 203.0/255.0
-                glove_marker.color.a = 1.0
-                self.marker_pub.publish(glove_marker)
-
-                print self.sample_name[i], current_centroid
-                cmd_str = "self.centroids_xyz_" + str(i) + ".append(current_centroid)"
-                exec cmd_str
-            # self.centroid_xyz.append(current_centroid)
+        print "Detection time",time.time()-t0
+           
 
     def callback_cloud(self, data):
         self.cloud = data
-        # pc2.read_points is super slow. It causes significant delay in image processing
-        if self.cloud is not None:
-            generator = pc2.read_points(self.cloud, skip_nans=False, field_names=("x", "y", "z"))
-            self.cloud_xyz = list(generator)
+        t0 = time.time()
+        cloud_accessor = PointCloudAccessor(self.cloud,['x','y','z'])
+        for i, mask in enumerate(self.cv_mask_list):
+            cloud_pt = list()
+            #  size mask.shape = (424 = self.image_height, 512 = self.image_height)
+            # len(mask[0] = 512), len(ind_y = 424)
+            indices =  np.where(mask == 255)
+            ind_y,ind_x = indices[0],indices[1]
+            # print "X range",np.min(ind_x),np.max(ind_x)
+            # print "Y range",np.min(ind_y),np.max(ind_y)
+        #     # print type(ind_x), "ind_x = ", ind_x.shape, "ind_y = ", ind_y.shape
+            for i_pt in range(0, ind_x.shape[0]):
+                current_pt = cloud_accessor(ind_x[i_pt],ind_y[i_pt])
+                cloud_pt.append(current_pt)
+            point_array = np.array(cloud_pt)
+            point_array = point_array[~np.isnan(point_array).any(1)]
+            current_centroid = np.mean(point_array, axis=0)
+            print self.sample_name[i], current_centroid
+            getattr(self,"centroids_xyz_" + str(i)).append(current_centroid)
 
+            self.Marker_purple.pose.position.x, self.Marker_purple.pose.position.y, self.Marker_purple.pose.position.z = current_centroid
+            self.marker_pub.publish(self.Marker_purple)
+        # self.centroid_xyz.append(current_centroid)
+        print "Centroid calculation time",time.time()-t0
 
 def main(args):
     quality_list = ["hd", "qhd", "sd"]
