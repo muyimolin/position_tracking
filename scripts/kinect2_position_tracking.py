@@ -117,34 +117,22 @@ class image_converter:
 
         # initialize markers
         
-        self.Marker_purple = Marker()
-        self.Marker_purple.type = Marker.SPHERE
-        self.Marker_purple.header.frame_id ="kinect2_link"
-        # self.Marker_purple.header.stamp = rospy.Time.now()
-        self.Marker_purple.pose.position.x = 0.0
-        self.Marker_purple.pose.position.y = 0.0
-        self.Marker_purple.pose.position.z = 0.0
-        self.Marker_purple.pose.orientation.w =1
-        self.Marker_purple.scale.x = 0.1
-        self.Marker_purple.scale.y = 0.1
-        self.Marker_purple.scale.z = 0.1
-        self.Marker_purple.color.r = 75.0/255.0
-        self.Marker_purple.color.g = 0.0/255.0
-        self.Marker_purple.color.b = 130.0/255.0
-        self.Marker_purple.color.a = 1.0
-        # self.marker_pub.publish(self.Marker_purple)
+        color_purple = [75.0, 0.0, 130.0]
 
-    # def add_marker(self, color):
-    #     marker = Marker()
-    #     marker.type = Marker.SPHERE
-    #     marker.header.frame_id ="kinect2_link"
-    #     # marker.header.stamp = rospy.Time.now()
-    #     marker.pose.position.x, marker.pose.position.y, marker.pose.position.z = 0.0
-    #     Marker_purple.pose.orientation.w =1
-    #     Marker_purple.scale.x, Marker_purple.scale.y, Marker_purple.scale.z = 0.1
-    #     Marker_purple.color.r, Marker_purple.color.g, Marker_purple.color.b = color
-    #     Marker_purple.color.a = 1.0  
-    #     return marker
+        self.Marker_purple = self.add_marker([x/255.0 for x in color_purple])
+
+
+    def add_marker(self, color):
+        marker = Marker()
+        marker.type = Marker.SPHERE
+        marker.header.frame_id ="kinect2_link"
+        # marker.header.stamp = rospy.Time.now()
+        marker.pose.position.x = marker.pose.position.y = marker.pose.position.z = 0.0
+        marker.pose.orientation.w =1
+        marker.scale.x = marker.scale.y = marker.scale.z = 0.05
+        marker.color.r, marker.color.g, marker.color.b = color
+        marker.color.a = 1.0  
+        return marker
 
 
     def callback_img(self,data):
@@ -177,7 +165,7 @@ class image_converter:
                     res = np.vstack((self.cv_image, cv_image_masked))
                     cv2.imshow("Image window", res)
                     self.command = cv2.waitKey(1)
-        print "Detection time",time.time()-t0
+        print "Detection time:",time.time()-t0
            
 
     def callback_cloud(self, data):
@@ -190,9 +178,7 @@ class image_converter:
             # len(mask[0] = 512), len(ind_y = 424)
             indices =  np.where(mask == 255)
             ind_y,ind_x = indices[0],indices[1]
-            # print "X range",np.min(ind_x),np.max(ind_x)
-            # print "Y range",np.min(ind_y),np.max(ind_y)
-        #     # print type(ind_x), "ind_x = ", ind_x.shape, "ind_y = ", ind_y.shape
+            # print type(ind_x), "ind_x = ", ind_x.shape, "ind_y = ", ind_y.shape
             for i_pt in range(0, ind_x.shape[0]):
                 current_pt = cloud_accessor(ind_x[i_pt],ind_y[i_pt])
                 cloud_pt.append(current_pt)
@@ -201,11 +187,11 @@ class image_converter:
             current_centroid = np.mean(point_array, axis=0)
             print self.sample_name[i], current_centroid
             getattr(self,"centroids_xyz_" + str(i)).append(current_centroid)
-
+            self.Marker_purple.header.stamp = rospy.Time.now()
             self.Marker_purple.pose.position.x, self.Marker_purple.pose.position.y, self.Marker_purple.pose.position.z = current_centroid
             self.marker_pub.publish(self.Marker_purple)
         # self.centroid_xyz.append(current_centroid)
-        print "Centroid calculation time",time.time()-t0
+        print "Centroid calculation time: ",time.time()-t0
 
 def main(args):
     quality_list = ["hd", "qhd", "sd"]
