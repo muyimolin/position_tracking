@@ -143,7 +143,7 @@ class image_converter:
 
         cv_image_HSV = cv2.cvtColor(self.cv_image, cv2.COLOR_BGR2HSV)
 
-        t0 = time.time()
+        # t0 = time.time()
         self.cv_mask_list = list()
         if len(self.hs_filter) > 0:
             for i, hs in enumerate(self.hs_filter):
@@ -165,12 +165,13 @@ class image_converter:
                     res = np.vstack((self.cv_image, cv_image_masked))
                     cv2.imshow("Image window", res)
                     self.command = cv2.waitKey(1)
-        print "Detection time:",time.time()-t0
+        # print "Detection time:",time.time()-t0
            
 
     def callback_cloud(self, data):
         self.cloud = data
-        t0 = time.time()
+        # t0 = time.time()
+        # t0_ros = rospy.Time.now()
         cloud_accessor = PointCloudAccessor(self.cloud,['x','y','z'])
         for i, mask in enumerate(self.cv_mask_list):
             cloud_pt = list()
@@ -191,7 +192,11 @@ class image_converter:
             self.Marker_purple.pose.position.x, self.Marker_purple.pose.position.y, self.Marker_purple.pose.position.z = current_centroid
             self.marker_pub.publish(self.Marker_purple)
         # self.centroid_xyz.append(current_centroid)
-        print "Centroid calculation time: ",time.time()-t0
+        # print "Centroid calculation time: ",time.time()-t0
+        # t_now = time.time()
+        # t_now_ros = rospy.Time.now()
+        # print "Time time: ", t_now - t0
+        # print "ROSpy time: ", t_now_ros - t0_ros
 
 def main(args):
     quality_list = ["hd", "qhd", "sd"]
