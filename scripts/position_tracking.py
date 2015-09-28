@@ -57,7 +57,7 @@ class image_converter:
         self.detect_mode = "hist"
         self.disc = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(5,5))
         self.cloud_xyz = None
-        sample_dir = "/home/motion/APC_ws/src/position_tracking/scripts/sample/"
+        sample_dir = "/home/motion/ros_ws/src/position_tracking/scripts/sample/"
         self.sample_name = [f for f in os.listdir(sample_dir) if os.path.isfile(os.path.join(sample_dir, f))]
         print self.sample_name
         self.hs_filter = list()
