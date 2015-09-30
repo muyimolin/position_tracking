@@ -13,6 +13,7 @@ from visualization_msgs.msg import Marker
 import time
 import numpy as np
 import roslib.message
+from tf import TransformListener
 
 
 
@@ -70,8 +71,9 @@ class image_converter:
         # detect_mode options: hue, hist
         self.detect_mode = "hist"
         self.disc = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(5,5))
-        sample_dir = "/home/motion/APC_ws/src/position_tracking/scripts/sample/"
+        sample_dir = "/home/motion/ros_ws/src/position_tracking/scripts/sample/"
         self.sample_name = [f for f in os.listdir(sample_dir) if os.path.isfile(os.path.join(sample_dir, f))]
+        
         print self.sample_name
         self.hs_filter = list()
         self.hsv_str = ["hue", "sat", "val"]
@@ -134,6 +136,8 @@ class image_converter:
         marker.color.a = 1.0  
         return marker
 
+    # def listen_to_tf(self):
+
 
     def callback_img(self,data):
         try:
@@ -185,7 +189,11 @@ class image_converter:
                 cloud_pt.append(current_pt)
             point_array = np.array(cloud_pt)
             point_array = point_array[~np.isnan(point_array).any(1)]
-            current_centroid = np.mean(point_array, axis=0)
+            mean = np.mean(point_array, axis=0)
+            std = np.std(point_array, axis=0)
+            conf = 0.8
+            inlier_array = [p for p in point_array if all(m - conf*s <= pi <= m+conf*s for (m,s,pi) in zip(mean,std,p))]
+            current_centroid = np.mean(inlier_array, axis=0)
             print self.sample_name[i], current_centroid
             getattr(self,"centroids_xyz_" + str(i)).append(current_centroid)
             self.Marker_purple.header.stamp = rospy.Time.now()
