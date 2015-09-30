@@ -176,7 +176,7 @@ class image_converter:
                     self.command = cv2.waitKey(1)
         # print "Detection time:",time.time()-t0
 
-        if not (self.cloud is None) and abs(self.cloud.stamp.to_sec()-self.image.stamp.to_sec()) < self.image_synchronization_threshold:
+        if not (self.cloud is None) and abs(self.cloud.header.stamp.to_sec()-self.image.header.stamp.to_sec()) < self.image_synchronization_threshold:
             self.compute_and_publish_blob()
 
     def compute_and_publish_blob(self):
@@ -214,7 +214,7 @@ class image_converter:
 
     def callback_cloud(self, data):
         self.cloud = data
-        if not (self.image is None) and abs(self.cloud.stamp.to_sec()-self.image.stamp.to_sec()) < self.image_synchronization_threshold:
+        if not (self.image is None) and abs(self.cloud.header.stamp.to_sec()-self.image.header.stamp.to_sec()) < self.image_synchronization_threshold:
             self.compute_and_publish_blob()
 
 
