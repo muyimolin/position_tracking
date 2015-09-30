@@ -60,7 +60,11 @@ class image_converter:
 
         self.previous_time = time.clock()
         self.current_time = time.clock()
+        #do detection for frames synchronized within this number of seconds
+        #this works for ~30Hz
+        self.image_synchronization_threshold = 1.0/40.0 
 
+        self.image = None
         self.cv_image = np.zeros((self.image_height,self.image_width,3), np.uint8)
 
         self.cloud = None
@@ -140,6 +144,7 @@ class image_converter:
 
 
     def callback_img(self,data):
+        self.image = data
         try:
             self.cv_image = self.bridge.imgmsg_to_cv2(data, "bgr8")
         except CvBridgeError, e:
@@ -170,10 +175,11 @@ class image_converter:
                     cv2.imshow("Image window", res)
                     self.command = cv2.waitKey(1)
         # print "Detection time:",time.time()-t0
-           
 
-    def callback_cloud(self, data):
-        self.cloud = data
+        if not (self.cloud is None) and abs(self.cloud.stamp.to_sec()-self.image.stamp.to_sec()) < self.image_synchronization_threshold:
+            self.compute_and_publish_blob()
+
+    def compute_and_publish_blob(self):
         # t0 = time.time()
         # t0_ros = rospy.Time.now()
         cloud_accessor = PointCloudAccessor(self.cloud,['x','y','z'])
@@ -204,7 +210,13 @@ class image_converter:
         # t_now = time.time()
         # t_now_ros = rospy.Time.now()
         # print "Time time: ", t_now - t0
-        # print "ROSpy time: ", t_now_ros - t0_ros
+        # print "ROSpy time: ", t_now_ros - t0_ros           
+
+    def callback_cloud(self, data):
+        self.cloud = data
+        if not (self.image is None) and abs(self.cloud.stamp.to_sec()-self.image.stamp.to_sec()) < self.image_synchronization_threshold:
+            self.compute_and_publish_blob()
+
 
 def main(args):
     quality_list = ["hd", "qhd", "sd"]
